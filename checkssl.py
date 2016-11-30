@@ -59,10 +59,10 @@ def api_limit_reached():
         data = r.json()
         try:
             if int(data['maxAssessments']) > int(data['currentAssessments']):
-                print "Current assessments: %s" % str(data['currentAssessments'])
+                print "Current assessments: %s/%s" % (str(data['currentAssessments']), str(data['maxAssessments']))
                 return False
             else:
-                print "Current assessments in progress: %s" % str(data['currentAssessments'])
+                print "Current assessments in progress: %s/%s" % (str(data['currentAssessments']), str(data['maxAssessments']))
                 return True
         except:
             print "Parse data error: {}".format(str(data))
@@ -92,6 +92,7 @@ def process_domain(domain, n=None):
         print "starting to analyze domain %s" % domain
         test = analyze(domain)
         if test['status'] == 'READY':
+            # TODO: Switch to use logger instead, meant for splunk
             with open(OUTFILE, 'a') as f:
                 f.write("%s\n" %(json.dumps(test)))
         while test['status'] != 'READY':
@@ -112,10 +113,12 @@ def process_domain(domain, n=None):
         process_domain(domain, n)
 
 def find_domains():
-    ip_ranges= []
+    # TODO: Fix up
+    ip_ranges= ['']
     from netaddr import IPNetwork
     import socket
     domains = []
+    # TODO: Loop over ip ranges as well
     for ip in list(IPNetwork(ip_ranges[0])):
         # print ip
         try:
@@ -129,30 +132,25 @@ def find_domains():
     return domains
 
 def main():
-    #check_list =
-    check_list = find_domains()
-    # if api_available():
-        # for domain in check_list:
-            # print "Testing domain %s" % domain
-            # process_domain(domain)
-        # print api_limit_reached()
-    # else:
-        # print "api not available"
+    check_list = []
 
-    # delays = [randrange(1, 10) for i in range(1000)]
-
-    def wait_delay(d, i):
-        print 'This is one thread with delay in function %d' % i
-        print 'sleeping for (%d)sec' % d
-        sleep(d)
+    #check_list = find_domains()
+    available = api_available()
+    if not available:
+        print "API not currently available. Waiting 60 secs. Trying for an hour"
+        count = 1
+        while count < 60 and not available:
+            count = count + 1
+            sleep(60)
+            available = api_available()
 
     pool = ThreadPool(api_limit_free()-1)
 
     for i, dom in enumerate(check_list):
         print 'Batch start progress: %.2f%c' % ((float(i)/float(len(check_list)))*100.0,'%')
-
         pool.add_task(process_domain, dom)
-        sleep(1)
+        sleep(2)
+
     pool.wait_completion()
 
 if __name__ == '__main__':
